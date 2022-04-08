@@ -8,16 +8,26 @@ import 'package:superheroes/resources/superheroes_images.dart';
 import 'package:superheroes/widgets/action_button.dart';
 import 'package:superheroes/widgets/info_with_button.dart';
 import 'package:superheroes/widgets/superhero_card.dart';
+import 'package:http/http.dart' as http;
 
 class MainPage extends StatefulWidget {
-  const MainPage({Key? key}) : super(key: key);
+  final http.Client? client;
+
+  const MainPage({Key? key, this.client}) : super(key: key);
 
   @override
   _MainPageState createState() => _MainPageState();
 }
 
 class _MainPageState extends State<MainPage> {
-  final MainBloc bloc = MainBloc();
+  late final MainBloc
+      bloc; //(late) says to compiler "Don't worry",we are later create this variable
+  // when you needed to use her
+  @override
+  void initState() {
+    super.initState();
+    bloc = MainBloc(client: widget.client);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,22 +49,50 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
-class MainPageContent extends StatelessWidget {
+class MainPageContent extends StatefulWidget {
+  @override
+  State<MainPageContent> createState() => _MainPageContentState();
+}
+
+class _MainPageContentState extends State<MainPageContent> {
+  late FocusNode searchFieldFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    searchFieldFocusNode = FocusNode();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        MainPageStateWidget(),
+        MainPageStateWidget(
+          searchFieldFocusNode: searchFieldFocusNode,
+        ),
         Padding(
           padding: const EdgeInsets.only(left: 16, right: 16, top: 12),
-          child: SearchWidget(),
+          child: SearchWidget(
+            searchFieldFocusNode: searchFieldFocusNode,
+          ),
         ),
       ],
     );
   }
+
+  @override
+  void dispose() {
+    super.dispose();
+    searchFieldFocusNode.dispose();
+  }
 }
 
 class SearchWidget extends StatefulWidget {
+  final FocusNode searchFieldFocusNode;
+
+  const SearchWidget({Key? key, required this.searchFieldFocusNode})
+      : super(key: key);
+
   @override
   State<SearchWidget> createState() => _SearchWidgetState();
 }
@@ -83,8 +121,8 @@ class _SearchWidgetState extends State<SearchWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final MainBloc bloc = Provider.of<MainBloc>(context, listen: false);
     return TextField(
+      focusNode: widget.searchFieldFocusNode,
       controller: controller,
       style: const TextStyle(
         fontWeight: FontWeight.w400,
@@ -129,6 +167,13 @@ class _SearchWidgetState extends State<SearchWidget> {
 }
 
 class MainPageStateWidget extends StatelessWidget {
+  final FocusNode searchFieldFocusNode;
+
+  const MainPageStateWidget({
+    Key? key,
+    required this.searchFieldFocusNode,
+  }) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     final MainBloc bloc = Provider.of<MainBloc>(context, listen: false);
@@ -148,7 +193,7 @@ class MainPageStateWidget extends StatelessWidget {
           case MainPageState.noFavorites:
             return Stack(
               children: [
-                NoFavoritesWidget(),
+                NoFavoritesWidget(searchFieldFocusNode: searchFieldFocusNode),
                 Align(
                     alignment: Alignment.bottomCenter,
                     child: ActionButton(
@@ -174,7 +219,8 @@ class MainPageStateWidget extends StatelessWidget {
               stream: bloc.observeSearchedSuperheroes(),
             );
           case MainPageState.nothingFound:
-            return NothingFoundWidget();
+            return NothingFoundWidget(
+                searchFieldFocusNode: searchFieldFocusNode);
           case MainPageState.loadingError:
             return LoadingErrorWidget();
           default:
@@ -256,9 +302,14 @@ class SuperheroesList extends StatelessWidget {
 }
 
 class NoFavoritesWidget extends StatelessWidget {
+  final FocusNode searchFieldFocusNode;
+
+  const NoFavoritesWidget({Key? key, required this.searchFieldFocusNode})
+      : super(key: key);
+
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: InfoWithButton(
         title: "No favorites yet",
         subtitle: "Search and add",
@@ -267,23 +318,32 @@ class NoFavoritesWidget extends StatelessWidget {
         imageHeight: 119,
         imageWidth: 108,
         imageTopPadding: 9,
+        onTap: () => searchFieldFocusNode.requestFocus(),
       ),
     );
   }
 }
 
 class NothingFoundWidget extends StatelessWidget {
+  final FocusNode searchFieldFocusNode;
+
+  const NothingFoundWidget({
+    Key? key,
+    required this.searchFieldFocusNode,
+  }) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: InfoWithButton(
         title: "Nothing found",
         subtitle: "Search for something else",
-        buttonText: "Retry",
+        buttonText: "Search",
         assetImage: SuperheroesImages.hulk,
         imageHeight: 112,
         imageWidth: 84,
         imageTopPadding: 16,
+        onTap: () => searchFieldFocusNode.requestFocus(),
       ),
     );
   }
@@ -292,15 +352,17 @@ class NothingFoundWidget extends StatelessWidget {
 class LoadingErrorWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final bloc = Provider.of<MainBloc>(context,listen: false);
+    return Center(
       child: InfoWithButton(
         title: "Error happened",
         subtitle: "Please try again",
-        buttonText: "Search",
+        buttonText: "Retry",
         assetImage: SuperheroesImages.superman,
         imageHeight: 106,
         imageWidth: 126,
         imageTopPadding: 22,
+        onTap: () => bloc.retry(),
       ),
     );
   }

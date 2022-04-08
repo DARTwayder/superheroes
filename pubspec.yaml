@@ -24,11 +24,13 @@ dependencies:
   cached_network_image: ^3.2.0
 
 
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   network_image_mock: ^2.1.0
-
+  json_serializable: ^6.1.5
+  build_runner: ^2.1.8
   flutter_lints: ^1.0.4
 
 

@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:superheroes/resources/superheroes_colors.dart';
 import 'package:superheroes/widgets/action_button.dart';
 
-
-
 class InfoWithButton extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -12,17 +10,19 @@ class InfoWithButton extends StatelessWidget {
   final double imageHeight;
   final double imageWidth;
   final double imageTopPadding;
+  final VoidCallback onTap;
 
-  const InfoWithButton(
-      {Key? key,
-      required this.title,
-      required this.subtitle,
-      required this.buttonText,
-      required this.assetImage,
-      required this.imageHeight,
-      required this.imageWidth,
-      required this.imageTopPadding})
-      : super(key: key);
+  const InfoWithButton({
+    Key? key,
+    required this.title,
+    required this.subtitle,
+    required this.buttonText,
+    required this.assetImage,
+    required this.imageHeight,
+    required this.imageWidth,
+    required this.imageTopPadding,
+    required this.onTap,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -35,20 +35,20 @@ class InfoWithButton extends StatelessWidget {
             Container(
               height: 108,
               width: 108,
-              decoration: const  BoxDecoration(
+              decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 color: SuperheroesColors.blue,
               ),
             ),
             Padding(
-              padding:  EdgeInsets.only(top: imageTopPadding),
+              padding: EdgeInsets.only(top: imageTopPadding),
               child: Image.asset(assetImage,
-                  height:imageHeight, width:imageWidth),
+                  height: imageHeight, width: imageWidth),
             ),
           ],
         ),
         const SizedBox(height: 20),
-         Text(
+        Text(
           title,
           style: const TextStyle(
               fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white),
@@ -60,7 +60,7 @@ class InfoWithButton extends StatelessWidget {
               fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
         ),
         const SizedBox(height: 30),
-        ActionButton(text: buttonText, onTap: () {}),
+        ActionButton(text: buttonText, onTap: onTap),
       ],
     );
   }
