@@ -6,7 +6,7 @@ import 'biography.dart';
 
 part 'superhero.g.dart';
 
-@JsonSerializable(fieldRename: FieldRename.kebab, explicitToJson: true)
+@JsonSerializable()
 class Superhero {
   final String id;
   final String name;

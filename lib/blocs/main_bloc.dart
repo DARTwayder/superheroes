@@ -62,11 +62,9 @@ class MainBloc {
     });
   }
 
-
-  void retry(){
-  final currentText = currentTextSubject.value;
-  searchForSuperheroes(currentText);
-
+  void retry() {
+    final currentText = currentTextSubject.value;
+    searchForSuperheroes(currentText);
   }
 
   Stream<List<SuperheroInfo>> observeFavoriteSuperheroes() =>
@@ -74,8 +72,6 @@ class MainBloc {
 
   Stream<List<SuperheroInfo>> observeSearchedSuperheroes() =>
       searchedSuperheroesSubject;
-
-
 
   Future<List<SuperheroInfo>> search(final String text) async {
     //our BLoC
@@ -97,6 +93,7 @@ class MainBloc {
           .toList();
       final List<SuperheroInfo> found = superheroes.map((superhero) {
         return SuperheroInfo(
+          id: superhero.id,
           name: superhero.name,
           realName: superhero.biography.fullName,
           imageUrl: superhero.image.url,
@@ -160,43 +157,54 @@ enum MainPageState {
 }
 
 class SuperheroInfo {
+  final String id;
   final String name;
   final String realName;
   final String imageUrl;
 
-  const SuperheroInfo(
-      {required this.name, required this.realName, required this.imageUrl});
+  const SuperheroInfo({
+    required this.name,
+    required this.realName,
+    required this.imageUrl,
+    required this.id,
+  });
+
 
   @override
   String toString() {
-    return 'SuperheroInfo{name: $name, realName: $realName, imageUrl: $imageUrl}';
+    return 'SuperheroInfo{id: $id, name: $name, realName: $realName, imageUrl: $imageUrl}';
   }
+
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is SuperheroInfo &&
           runtimeType == other.runtimeType &&
+          id == other.id &&
           name == other.name &&
           realName == other.realName &&
           imageUrl == other.imageUrl;
 
   @override
-  int get hashCode => name.hashCode ^ realName.hashCode ^ imageUrl.hashCode;
-
+  int get hashCode =>
+      id.hashCode ^ name.hashCode ^ realName.hashCode ^ imageUrl.hashCode;
   static const mocked = [
     SuperheroInfo(
+      id:"70",
       name: "Batman",
       realName: "Bruce Wayne",
       imageUrl:
           "https://www.superherodb.com/pictures2/portraits/10/100/639.jpg",
     ),
     SuperheroInfo(
+      id:"732",
       name: "Ironman",
       realName: "Tony Stark",
       imageUrl: "https://www.superherodb.com/pictures2/portraits/10/100/85.jpg",
     ),
     SuperheroInfo(
+      id:"687",
       name: "Venom",
       realName: "Eddie Brock",
       imageUrl: "https://www.superherodb.com/pictures2/portraits/10/100/22.jpg",
