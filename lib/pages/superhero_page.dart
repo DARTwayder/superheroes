@@ -1,14 +1,19 @@
 import 'dart:math';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:superheroes/model/biography.dart';
 import 'package:superheroes/model/powerstats.dart';
-import 'package:superheroes/model/server_image.dart';
+
 import 'package:superheroes/model/superhero.dart';
 import 'package:superheroes/resources/superheroes_colors.dart';
 import 'package:http/http.dart' as http;
+import 'package:superheroes/resources/superheroes_icons.dart';
+import 'package:superheroes/resources/superheroes_images.dart';
+import 'package:superheroes/widgets/alignment_widget.dart';
 
 import '../blocs/superhero_bloc.dart';
 
@@ -36,7 +41,7 @@ class _SuperheroPageState extends State<SuperheroPage> {
   Widget build(BuildContext context) {
     return Provider.value(
       value: bloc,
-      child:  Scaffold(
+      child: Scaffold(
         backgroundColor: SuperheroesColors.background,
         body: SuperheroContentPage(),
       ),
@@ -51,8 +56,7 @@ class _SuperheroPageState extends State<SuperheroPage> {
 }
 
 class SuperheroContentPage extends StatelessWidget {
-
-    @override
+  @override
   Widget build(BuildContext context) {
     final bloc = Provider.of<SuperheroBloc>(context, listen: false);
     return StreamBuilder<Superhero>(
@@ -74,6 +78,9 @@ class SuperheroContentPage extends StatelessWidget {
                   if (superhero.powerstats.isNotNull())
                     PowerstatsWidget(powerstats: superhero.powerstats),
                   BiographyWidget(biography: superhero.biography),
+                  const SizedBox(
+                    height: 30,
+                  ),
                 ],
               ),
             ),
@@ -286,10 +293,98 @@ class BiographyWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 300,
-      alignment: Alignment.center,
-      child: Text(biography.toJson().toString(),
-          style: const TextStyle(color: Colors.white)),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: SuperheroesColors.indigo,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding:
+                const EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Text(
+                    "Bio".toUpperCase(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                BiographyField(
+                  fieldName: 'Full Name',
+                  fieldValue: biography.fullName,
+                ),
+                const SizedBox(height: 20),
+                BiographyField(
+                  fieldName: 'Aliases',
+                  fieldValue: biography.aliases.join(", "),
+                ),
+                const SizedBox(height: 20),
+                BiographyField(
+                  fieldName: 'Place of birth',
+                  fieldValue: biography.placeOfBirth,
+                ),
+              ],
+            ),
+          ),
+          if (biography.alignmentInfo != null)
+            Align(
+              alignment: Alignment.topRight,
+              child: AlignmentWidget(
+                alignmentInfo: biography.alignmentInfo!,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class BiographyField extends StatelessWidget {
+  final String fieldName;
+  final String fieldValue;
+
+  const BiographyField({
+    Key? key,
+    required this.fieldName,
+    required this.fieldValue,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          fieldName.toUpperCase(),
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+            color: SuperheroesColors.secondaryGrey,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          fieldValue,
+          style: const TextStyle(
+            fontWeight: FontWeight.w400,
+            fontSize: 16,
+            color: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -309,7 +404,8 @@ class SuperheroAppBar extends StatelessWidget {
       pinned: true,
       floating: true,
       expandedHeight: 348,
-
+      // добавление в фэйворит и удаление из файворит
+      actions: [FavoriteButton()],
       backgroundColor: SuperheroesColors.background,
       flexibleSpace: FlexibleSpaceBar(
         title: Text(
@@ -324,8 +420,51 @@ class SuperheroAppBar extends StatelessWidget {
         background: CachedNetworkImage(
           imageUrl: superhero.image.url,
           fit: BoxFit.cover,
+          placeholder: (context, url) {
+            return const ColoredBox(color: SuperheroesColors.indigo);
+          },
+          errorWidget: (context, url, error) {
+            return Container(
+              color: SuperheroesColors.indigo,
+              alignment: Alignment.center,
+              child: Image.asset(
+                SuperheroesImages.unknownBig,
+                width: 85,
+                height: 264,
+              ),
+            );
+          },
         ),
       ),
+    );
+  }
+}
+
+class FavoriteButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final bloc = Provider.of<SuperheroBloc>(context, listen: false);
+    return StreamBuilder<bool>(
+      stream: bloc.observeIsFavorite(),
+      initialData: false,
+      builder: (context, snapshot) {
+        final favorite =
+            !snapshot.hasData || snapshot.data == null || snapshot.data!;
+        return GestureDetector(
+          onTap: () =>
+              favorite ? bloc.removeFromFavorites() : bloc.addToFavorite(),
+          child: Container(
+            height: 52,
+            width: 52,
+            alignment: Alignment.center,
+            child: Image.asset(
+              favorite ? SuperheroIcons.starFilled : SuperheroIcons.starEmpty,
+              height: 32,
+              width: 32,
+            ),
+          ),
+        );
+      },
     );
   }
 }

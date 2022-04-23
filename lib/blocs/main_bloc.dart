@@ -4,62 +4,81 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:rxdart/rxdart.dart';
 import 'package:superheroes/exception/api_exception.dart';
+import 'package:superheroes/favorite_superheroes_storage.dart';
+import 'package:superheroes/model/alignment_info.dart';
 import 'package:superheroes/model/superhero.dart';
 
 class MainBloc {
   static const minSymbols = 3;
 
   final BehaviorSubject<MainPageState> stateSubject = BehaviorSubject();
-  final favoriteSuperheroesSubject =
-      BehaviorSubject<List<SuperheroInfo>>.seeded(SuperheroInfo.mocked);
   final searchedSuperheroesSubject = BehaviorSubject<List<SuperheroInfo>>();
   final currentTextSubject = BehaviorSubject<String>.seeded("");
 
   StreamSubscription? textSubscription;
   StreamSubscription? searchSubscription;
+  StreamSubscription? removeFromFavoritesSubscription;
 
   http.Client? client;
 
   MainBloc({this.client}) {
-    stateSubject.add(MainPageState.noFavorites);
-
-    textSubscription =
-        Rx.combineLatest2<String, List<SuperheroInfo>, MainPageStateInfo>(
-                currentTextSubject
-                    .distinct()
-                    .debounceTime(const Duration(milliseconds: 500)),
-                favoriteSuperheroesSubject,
-                (searchedText, favorietes) =>
-                    MainPageStateInfo(searchedText, favorietes.isNotEmpty))
-            .listen((value) {
-      print("CHANGED $value");
-      searchSubscription?.cancel();
-      if (value.searchedText.isEmpty) {
-        if (value.haveFavorites) {
-          stateSubject.add(MainPageState.favorites);
+        textSubscription =
+        Rx.combineLatest2<String, List<Superhero>, MainPageStateInfo>(
+            currentTextSubject
+                .distinct()
+                .debounceTime(const Duration(milliseconds: 500)),
+            FavoriteSuperheroesStorage.getInstance()
+                .observeFavoriteSuperheroes(),
+            (searchedText, favorietes) =>
+                MainPageStateInfo(searchedText, favorietes.isNotEmpty)).listen(
+      (value) {
+        print("CHANGED $value");
+        searchSubscription?.cancel();
+        if (value.searchedText.isEmpty) {
+          if (value.haveFavorites) {
+            stateSubject.add(MainPageState.favorites);
+          } else {
+            stateSubject.add(MainPageState.noFavorites);
+          }
+        } else if (value.searchedText.length < minSymbols) {
+          stateSubject.add(MainPageState.minSymbols);
         } else {
-          stateSubject.add(MainPageState.noFavorites);
+          searchForSuperheroes(value.searchedText);
         }
-      } else if (value.searchedText.length < minSymbols) {
-        stateSubject.add(MainPageState.minSymbols);
-      } else {
-        searchForSuperheroes(value.searchedText);
-      }
-    });
+      },
+    );
   }
 
   void searchForSuperheroes(final String text) {
     stateSubject.add(MainPageState.loading);
-    searchSubscription = search(text).asStream().listen((searchResults) {
-      if (searchResults.isEmpty) {
-        stateSubject.add(MainPageState.nothingFound);
-      } else {
-        searchedSuperheroesSubject.add(searchResults);
-        stateSubject.add(MainPageState.searchResults);
-      }
-    }, onError: (error, stackTrace) {
-      stateSubject.add(MainPageState.loadingError);
-    });
+    searchSubscription = search(text).asStream().listen(
+      (searchResults) {
+        if (searchResults.isEmpty) {
+          stateSubject.add(MainPageState.nothingFound);
+        } else {
+          searchedSuperheroesSubject.add(searchResults);
+          stateSubject.add(MainPageState.searchResults);
+        }
+      },
+      onError: (error, stackTrace) {
+        stateSubject.add(MainPageState.loadingError);
+      },
+    );
+  }
+
+  void removeFromFavorites(final String id) {
+    removeFromFavoritesSubscription?.cancel();
+    removeFromFavoritesSubscription = FavoriteSuperheroesStorage.getInstance()
+        .removeFromFavorites(id)
+        .asStream()
+        .listen(
+      (event) {
+        print("Removed from favorites:$event");
+      },
+      onError: (error, stackTrace) {
+        print("Error happened removeFromFavorites:$error,$stackTrace");
+      },
+    );
   }
 
   void retry() {
@@ -68,7 +87,10 @@ class MainBloc {
   }
 
   Stream<List<SuperheroInfo>> observeFavoriteSuperheroes() =>
-      favoriteSuperheroesSubject;
+      FavoriteSuperheroesStorage.getInstance().observeFavoriteSuperheroes().map(
+          (superheroes) => superheroes
+              .map((superhero) => SuperheroInfo.fromSuperhero(superhero))
+              .toList());
 
   Stream<List<SuperheroInfo>> observeSearchedSuperheroes() =>
       searchedSuperheroesSubject;
@@ -92,12 +114,7 @@ class MainBloc {
           .map((rawSuperhero) => Superhero.fromJson(rawSuperhero))
           .toList();
       final List<SuperheroInfo> found = superheroes.map((superhero) {
-        return SuperheroInfo(
-          id: superhero.id,
-          name: superhero.name,
-          realName: superhero.biography.fullName,
-          imageUrl: superhero.image.url,
-        );
+        return SuperheroInfo.fromSuperhero(superhero);
       }).toList();
       return found;
     } else if (decoded['response'] == 'error') {
@@ -110,17 +127,6 @@ class MainBloc {
   }
 
   Stream<MainPageState> observeMainPageState() => stateSubject;
-
-  void removeFavorite() {
-    final List<SuperheroInfo> currentFavorites =
-        favoriteSuperheroesSubject.value;
-    if (currentFavorites.isEmpty) {
-      favoriteSuperheroesSubject.add(SuperheroInfo.mocked);
-    } else {
-      favoriteSuperheroesSubject
-          .add(currentFavorites.sublist(0, currentFavorites.length - 1));
-    }
-  }
 
   void nextState() {
     final currentState = stateSubject.value;
@@ -137,12 +143,12 @@ class MainBloc {
   void dispose() {
     //dispose method
     stateSubject.close();
-    favoriteSuperheroesSubject.close();
     searchedSuperheroesSubject.close();
     currentTextSubject.close();
-
+    searchSubscription?.cancel();
     textSubscription?.cancel();
     client?.close();
+    removeFromFavoritesSubscription?.cancel();
   }
 }
 
@@ -161,20 +167,30 @@ class SuperheroInfo {
   final String name;
   final String realName;
   final String imageUrl;
+  final AlignmentInfo? alignmentInfo;
 
   const SuperheroInfo({
+    required this.id,
     required this.name,
     required this.realName,
     required this.imageUrl,
-    required this.id,
+    this.alignmentInfo,
   });
 
+  factory SuperheroInfo.fromSuperhero(final Superhero superhero) {
+    return SuperheroInfo(
+      id: superhero.id,
+      name: superhero.name,
+      realName: superhero.biography.fullName,
+      imageUrl: superhero.image.url,
+      alignmentInfo: superhero.biography.alignmentInfo,
+    );
+  }
 
   @override
   String toString() {
     return 'SuperheroInfo{id: $id, name: $name, realName: $realName, imageUrl: $imageUrl}';
   }
-
 
   @override
   bool operator ==(Object other) =>
@@ -191,20 +207,20 @@ class SuperheroInfo {
       id.hashCode ^ name.hashCode ^ realName.hashCode ^ imageUrl.hashCode;
   static const mocked = [
     SuperheroInfo(
-      id:"70",
+      id: "70",
       name: "Batman",
       realName: "Bruce Wayne",
       imageUrl:
           "https://www.superherodb.com/pictures2/portraits/10/100/639.jpg",
     ),
     SuperheroInfo(
-      id:"732",
+      id: "732",
       name: "Ironman",
       realName: "Tony Stark",
       imageUrl: "https://www.superherodb.com/pictures2/portraits/10/100/85.jpg",
     ),
     SuperheroInfo(
-      id:"687",
+      id: "687",
       name: "Venom",
       realName: "Eddie Brock",
       imageUrl: "https://www.superherodb.com/pictures2/portraits/10/100/22.jpg",
