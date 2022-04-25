@@ -1,6 +1,6 @@
 *.env
 
-**/failures/.png
+**/failures/*.png
 
 # Miscellaneous
 *.class
