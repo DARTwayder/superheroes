@@ -14,6 +14,7 @@ class SuperheroBloc {
   final String id;
 
   final superheroSubject = BehaviorSubject<Superhero>();
+  final superheroPageStateSubject = BehaviorSubject<SuperheroPageState>();
 
   StreamSubscription? getFromFavoritesSubscription;
   StreamSubscription? requestSubscription;
@@ -33,8 +34,12 @@ class SuperheroBloc {
       (superhero) {
         if (superhero != null) {
           superheroSubject.add(superhero);
+          superheroPageStateSubject.add(SuperheroPageState.loaded);
+        } else {
+          superheroPageStateSubject.add(SuperheroPageState.loading);
         }
-        requestSuperhero();
+        // вызов requestSuperhero если данные устарели и их надо обновить
+        requestSuperhero(superhero != null);
       },
       onError: (error, stackTrace) {
         print("Error happened addFavorite:$error,$stackTrace");
@@ -80,18 +85,27 @@ class SuperheroBloc {
   Stream<bool> observeIsFavorite() =>
       FavoriteSuperheroesStorage.getInstance().observeIsFavorite(id);
 
-
   //Поиск на сервере
-  void requestSuperhero() {
+  void requestSuperhero(final bool isInFavorites) {
     requestSubscription?.cancel();
     requestSubscription = request().asStream().listen(
       (superhero) {
         superheroSubject.add(superhero);
+        superheroPageStateSubject.add(SuperheroPageState.loaded);
       },
       onError: (error, stackTrace) {
+        if (!isInFavorites) {
+          superheroPageStateSubject.add(SuperheroPageState.error);
+        }
         print("Error happened requestSuperhero:$error,$stackTrace");
       },
     );
+  }
+
+  void retry() {
+    superheroPageStateSubject.add(SuperheroPageState.loading);
+
+    requestSuperhero(false);
   }
 
   Future<Superhero> request() async {
@@ -107,14 +121,22 @@ class SuperheroBloc {
     final decoded = json.decode(response.body); //Json
 
     if (decoded['response'] == 'success') {
-      return Superhero.fromJson(decoded);
+      final superhero = Superhero.fromJson(decoded);
+//Автообновление модели после получение ответа от сервера и сохраняется в постоянное хранилише SharedPreferences в нашем случае
+      await FavoriteSuperheroesStorage.getInstance()
+          .updateIfInFavorites(superhero);
+      return superhero;
     } else if (decoded['response'] == 'error') {
       throw ApiException("Client error happened");
     }
     throw Exception("Unknown error happened");
   }
+
 //Стрим с супергероем
-  Stream<Superhero> observeSuperhero() => superheroSubject;
+  Stream<Superhero> observeSuperhero() => superheroSubject.distinct();
+
+  Stream<SuperheroPageState> observeSuperheroPageState() =>
+      superheroPageStateSubject.distinct();
 
   void dispose() {
     client?.close();
@@ -123,5 +145,8 @@ class SuperheroBloc {
     addToFavoriteSubscription?.cancel();
     removeFromFavoritesSubscription?.cancel();
     getFromFavoritesSubscription?.cancel();
+    superheroPageStateSubject.close();
   }
 }
+
+enum SuperheroPageState { loading, loaded, error }
